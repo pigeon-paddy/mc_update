@@ -1,0 +1,16 @@
+[project]
+name = "mc-update"
+version = "0.1.0"
+description = "Find the best Minecraft version for your mod list (Modrinth + CurseForge) and export markdown lists"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+]
+
+[project.scripts]
+mc-update = "mc_update.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8,<0.13"]
+build-backend = "uv_build"
