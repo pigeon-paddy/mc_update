@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import fields
 
+from ..config.default_config import RELEASE_RE, WILDCARD_RE
+
 
 # --------------------------------------------------------------------------- #
 # Data classes
@@ -18,7 +20,31 @@ def version_key(v: str) -> tuple[int, ...]:
         1.21.1 -> (1, 21, 1)  <  1.21.11 -> (1, 21, 11)  <  26.1 -> (26, 1)  <  26.1.1 -> (26, 1, 1)
     (old scheme is 1.<major>.<patch>, new scheme is <year>.<drop>.<hotfix>)
     """
-    return tuple(int(p) for p in v.split("."))
+    return tuple(WILDCARD_SORT if p.lower() in ("x", "*") else int(p) for p in v.split("."))
+
+
+WILDCARD_SORT = 10**6          # "1.21.x" sorts after every real 1.21.N
+
+
+def normalize_version_tag(tag: str) -> str | None:
+    """'1.21.X' / '1.21.*' -> '1.21.x'; a plain release stays as is; anything else (snapshots, ...) -> None."""
+    tag = tag.strip()
+    m = WILDCARD_RE.match(tag)
+    if m:
+        return f"{m.group(1)}.x"
+    return tag if RELEASE_RE.match(tag) else None
+
+
+def is_wildcard(tag: str) -> bool:
+    return tag.endswith(".x")
+
+
+def series_matches(tag: str, version: str) -> bool:
+    """Does the tag cover this version? Exact for releases; '1.21.x' covers 1.21 (=1.21.0), 1.21.1, ... 1.21.N."""
+    if not is_wildcard(tag):
+        return tag == version
+    series = tag[:-2]                                    # '1.21'
+    return version == series or version.startswith(series + ".")
 
 
 @dataclass
@@ -47,8 +73,20 @@ class Project:
         known = {f.name for f in fields(cls)}          # ignore keys from older/newer schemas
         return cls(**{k: v for k, v in d.items() if k in known})
 
+    def has_version(self, mc_version: str) -> bool:
+        """Supported on this release, either listed explicitly or covered by a wildcard like '1.21.x'."""
+        return any(series_matches(tag, mc_version) for tag in self.version_loaders)
+
+    def loaders_on(self, mc_version: str) -> set[str]:
+        """Loaders supporting this release (union over the explicit entry and matching wildcard entries)."""
+        out: set[str] = set()
+        for tag, loaders in self.version_loaders.items():
+            if series_matches(tag, mc_version):
+                out |= {l.lower() for l in loaders}
+        return out
+
     def supports(self, mc_version: str) -> bool:
-        return mc_version in self.versions
+        return self.has_version(mc_version)
 
     def pretty(self) -> str:
         w = 12
@@ -96,11 +134,11 @@ class MC:
 
 def supports_on(p: Project, version: str, loader: str | None = None) -> bool:
     """MC version supported (and, for mods, the given loader if one is requested)."""
-    if version not in p.version_loaders:
+    if not p.has_version(version):
         return False
     if loader is None or p.project_type != "mod":          # datapacks/plugins/resource packs: version only
         return True
-    loaders = {l.lower() for l in p.version_loaders[version]}
+    loaders = p.loaders_on(version)
     return loader.lower() in loaders or "any" in loaders
 
 

@@ -9,12 +9,11 @@ from ..config.default_config import (
     CF_GAME_ID_MINECRAFT,
     CF_LOADERS,
     CURSEFORGE_API,
-    RELEASE_RE,
     TIMEOUT,
     require_env,
     user_agent,
 )
-from ..models.classes import Project, version_key
+from ..models.classes import Project, normalize_version_tag, version_key
 
 
 # --------------------------------------------------------------------------- #
@@ -55,8 +54,8 @@ def curseforge_get(project_name: str, api_key: str | None = None, project_type: 
     idx = m.get("latestFilesIndexes", [])
     vl: dict[str, set[str]] = {}
     for i in idx:
-        gv = i["gameVersion"]
-        if not RELEASE_RE.match(gv):
+        tag = normalize_version_tag(i["gameVersion"])      # keeps wildcards like "1.21.x"
+        if not tag:
             continue
         ml = i.get("modLoader")
         if project_type == "plugin":
@@ -65,7 +64,7 @@ def curseforge_get(project_name: str, api_key: str | None = None, project_type: 
             name = "any"                                  # no loader info (e.g. libraries, packs)
         else:
             name = CF_LOADERS.get(ml, "unknown")
-        vl.setdefault(gv, set()).add(name)
+        vl.setdefault(tag, set()).add(name)
     mc_versions = sorted(vl, key=version_key, reverse=True)
     loaders = sorted({l for ls in vl.values() for l in ls})
     latest = m.get("latestFiles", [])

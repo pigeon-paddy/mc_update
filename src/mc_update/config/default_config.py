@@ -86,9 +86,11 @@ MISS_TTL = 1 * 3600        # "not found" results: 1 h
 
 MC_VERSIONS_TTL = 6 * 3600   # list of MC releases: 6 h
 
-DEFAULT_MIN_VERSION = "1.21.1"
+DEFAULT_MIN_VERSION = "1.21.11"
 
 RELEASE_RE = re.compile(r"^\d+\.\d+(\.\d+)?$")  # skips snapshots / pre-releases
+# A project tag like "1.21.x" (or 1.21.*) means: every release of that series, 1.21.0 up to the last 1.21.N
+WILDCARD_RE = re.compile(r"^(\d+\.\d+)\.[xX*]$")
 
 # Modrinth lists loaders (fabric, forge, ...) inside "categories"; they are not real categories
 LOADER_TAGS = {"fabric", "forge", "neoforge", "quilt", "liteloader", "rift", "modloader",
@@ -100,31 +102,25 @@ LOADER_TAGS = {"fabric", "forge", "neoforge", "quilt", "liteloader", "rift", "mo
 # Mods are sorted by sub-category in the order listed here, then by title; no sub-headings are written.
 # Edit freely - anything that matches nothing ends up under "Other".
 CATEGORY_GROUPS: dict[str, list[tuple[str, ...]]] = {
-    "Performance & Server": [
-        ("Optimization", "optimization", "performance"),
-        ("Server", "server utility", "server", "management"),
-        ("Library", "library", "library / api", "api and library"),
-    ],
-    "Technology & Automation": [
-        ("Technology", "technology"),
-        ("Redstone", "redstone"),
-        ("Storage", "storage"),
-        ("Transportation", "transportation"),
-    ],
-    "World & Exploration": [
+    "World Generation": [
         ("World generation", "worldgen", "world gen", "world generation"),
-        ("Adventure", "adventure", "adventure and rpg"),
-        ("Mobs", "mobs"),
-        ("Map & information", "map and information", "information"),
+    ],
+    "World Exploration": [
+            ("Adventure", "adventure", "adventure and rpg"),
+            ("Mobs", "mobs"),
+            ("Map & information", "map and information", "information"),
     ],
     "Gameplay": [
         ("Game mechanics", "game-mechanics", "game mechanics"),
         ("Magic", "magic"),
         ("Equipment", "equipment", "armor, tools, and weapons"),
         ("Food", "food", "food and cooking"),
-        ("Economy", "economy"),
-        ("Minigame", "minigame"),
-        ("Cursed", "cursed"),
+    ],
+    "Technology & Automation": [
+            ("Technology", "technology"),
+            ("Redstone", "redstone"),
+            ("Storage", "storage"),
+            ("Transportation", "transportation"),
     ],
     "Visuals & Quality of Life": [
         ("Decoration", "decoration"),
@@ -133,6 +129,14 @@ CATEGORY_GROUPS: dict[str, list[tuple[str, ...]]] = {
         ("Social", "social"),
         ("Education", "education"),
     ],
+    "Performance & Server": [
+            ("Optimization", "optimization", "performance"),
+            ("Server", "server utility", "server", "management"),
+            ("Library", "library", "library / api", "api and library"),
+            ("Economy", "economy"),
+            ("Minigame", "minigame"),
+            ("Cursed", "cursed"),
+        ],
     "Other": [
         ("Miscellaneous", "miscellaneous"),
     ],

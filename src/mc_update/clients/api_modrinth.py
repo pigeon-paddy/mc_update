@@ -12,7 +12,7 @@ from ..config.default_config import (
     TIMEOUT,
     user_agent,
 )
-from ..models.classes import Project, version_key
+from ..models.classes import Project, normalize_version_tag, version_key
 
 
 # --------------------------------------------------------------------------- #
@@ -55,12 +55,14 @@ def modrinth_get(project_name: str, project_type: str = "mod") -> Project | None
     vl: dict[str, set[str]] = {}
     for ver in vers:
         for gv in ver.get("game_versions", []):
-            if RELEASE_RE.match(gv):
-                vl.setdefault(gv, set()).update(l.lower() for l in ver.get("loaders", []))
+            tag = normalize_version_tag(gv)                # keeps wildcards like "1.21.x"
+            if tag:
+                vl.setdefault(tag, set()).update(l.lower() for l in ver.get("loaders", []))
     if not vl:                                            # no files listed: fall back to project-level lists
         for gv in p.get("game_versions", []):
-            if RELEASE_RE.match(gv):
-                vl[gv] = {l.lower() for l in p.get("loaders", [])}
+            tag = normalize_version_tag(gv)
+            if tag:
+                vl[tag] = {l.lower() for l in p.get("loaders", [])}
     mc_versions = sorted(vl, key=version_key, reverse=True)
 
     return Project(

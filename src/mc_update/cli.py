@@ -26,11 +26,12 @@ from .models.classes import (
     MC,
     Project,
     build_compatible,
+    series_matches,
     supports_on,
     top_versions,
     version_key,
 )
-from .parsers.file_handler import export_all, export_markdown, read_mod_list
+from .parsers.file_handler import export_all, export_markdown, read_mod_list, initMarkdown
 
 
 # --------------------------------------------------------------------------- #
@@ -99,10 +100,10 @@ def build_mc(loader: str | None, min_version: str = DEFAULT_MIN_VERSION,
 
 def explain_misses(projects: list[Project], mc: MC) -> None:
     """Say *why* a project is not compatible (wrong loader vs. version outside the range)."""
-    lo, hi = version_key(mc.min_version), version_key(mc.max_version)
+    targets = mc.target_versions()                         # releases inside the configured range
     for p in projects:
-        in_range = [v for v in p.versions if lo <= version_key(v) <= hi]
-        outside = [v for v in p.versions if v not in in_range]
+        in_range = [v for v in targets if p.has_version(v)]    # wildcards like 1.21.x count for every 1.21.N
+        outside = [t for t in p.versions if not any(series_matches(t, v) for v in targets)]
         print(f"  {p.title} [{p.source}, {p.project_type}] loaders={p.modloader or '-'} versions={p.versions or '-'}")
         if not in_range:
             print(f"    x no supported version inside {mc.min_version} .. {mc.max_version}"
@@ -144,7 +145,14 @@ def main() -> None:
         verbose = True                               # always show the full project info here
         do_export = "--export" in sys.argv           # test mode only writes files on request
     else:
-        path = Path(_opt_or_none("file") or require_env("MOD_LIST_PATH"))
+    
+        base_path = Path(_opt_or_none("file") or require_env("MOD_LIST_PATH"))
+        path = initMarkdown(base_path)
+        if path is None:
+            return
+    
+    
+        # path = Path(_opt_or_none("file") or require_env("MOD_LIST_PATH"))
         try:
             names = read_mod_list(path)
         except OSError as e:
@@ -191,7 +199,12 @@ def main() -> None:
                 if (p.source, p.id) not in seen_ids:
                     seen_ids.add((p.source, p.id))
                     everything.append(p)
-        print(f"\nWrote {export_all(everything, out_dir, prefix)}  ({len(everything)} projects)")
+        try:                                             # all known releases, to resolve wildcards like 1.21.x
+            known = mc_versions_between("0.0", None, cache, refresh)
+        except Exception as e:
+            print(f"[mc versions] release list unavailable ({e}); wildcard versions stay unresolved", file=sys.stderr)
+            known = []
+        print(f"\nWrote {export_all(everything, out_dir, prefix, known)}  ({len(everything)} projects)")
 
     only = _opt_or_none("version")                   # --version=X: one fixed MC version, no best-fit ranking
     try:

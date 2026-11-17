@@ -17,7 +17,7 @@ from ..config.default_config import (
     TYPE_ORDER,
     UNIVERSAL_TYPES,
 )
-from ..models.classes import Project, version_key
+from ..models.classes import Project, is_wildcard, series_matches, version_key
 
 
 def _norm(text: str) -> str:
@@ -33,16 +33,12 @@ _CATEGORY_INDEX: dict[str, tuple[str, int]] = {
 }
 
 
-def _loaders_on(p: Project, version: str) -> set[str]:
-    return {l.lower() for l in p.version_loaders.get(version, [])}
-
-
 def loader_columns(projects: list[Project], version: str) -> list[str]:
     """Loader columns for this file: every real loader any mod/plugin supports on this MC version."""
     cols: set[str] = set()
     for p in projects:
         if p.project_type not in UNIVERSAL_TYPES:
-            cols |= _loaders_on(p, version) - NON_COLUMN_LOADERS
+            cols |= p.loaders_on(version) - NON_COLUMN_LOADERS
     known = [l for l in LOADER_ORDER if l in cols]
     return known + sorted(cols - set(known))
 
@@ -51,7 +47,7 @@ def loader_cells(p: Project, version: str, columns: list[str]) -> set[str]:
     """Which loader columns get a mark for this project (a mod can fill several)."""
     if p.project_type in UNIVERSAL_TYPES:
         return set(columns)
-    loaders = _loaders_on(p, version)
+    loaders = p.loaders_on(version)
     return set(columns) if "any" in loaders else loaders & set(columns)
 
 
@@ -173,9 +169,18 @@ def _sort_loaders(loaders: set[str]) -> list[str]:
     return known + sorted(loaders - set(known))
 
 
-def highest_version(p: Project) -> str | None:
-    """Highest MC release the project supports, whatever the configured range is."""
-    return max(p.version_loaders, key=version_key) if p.version_loaders else None
+def highest_version(p: Project, known: list[str] | None = None) -> str | None:
+    """
+    Highest MC release the project supports, whatever the configured range is.
+    A wildcard like '1.21.x' resolves to the newest known 1.21.N (needs `known`, the list of all releases);
+    without it the wildcard itself is returned.
+    """
+    candidates = {v for v in (known or []) if p.has_version(v)}       # known releases it covers
+    for tag in p.version_loaders:
+        # explicit entries always count; a wildcard only if no known release resolved it
+        if not is_wildcard(tag) or not any(series_matches(tag, v) for v in candidates):
+            candidates.add(tag)
+    return max(candidates, key=version_key) if candidates else None
 
 
 def _loader_text(p: Project, version: str | None) -> str:
@@ -184,14 +189,14 @@ def _loader_text(p: Project, version: str | None) -> str:
         return "-"
     if p.project_type in UNIVERSAL_TYPES:
         return "all"                                       # datapacks / resource packs: every loader
-    loaders = _loaders_on(p, version)
+    loaders = p.loaders_on(version)
     if "any" in loaders:
         return "any"
     shown = _sort_loaders(loaders - NON_COLUMN_LOADERS)
     return ", ".join(_loader_label(l) for l in shown) or "-"
 
 
-def render_all(projects: list[Project]) -> str:
+def render_all(projects: list[Project], known: list[str] | None = None) -> str:
     """
     Every project, regardless of MC version: same headings, categories and sorting as the user view,
     but each row shows the highest supported MC version and the loaders that support it.
@@ -202,7 +207,7 @@ def render_all(projects: list[Project]) -> str:
         for heading, entries in sections:
             lines = [_row(["Name", "Highest MC", "Loader"]), _row(["---", ":-:", "---"])]
             for p in entries:
-                v = highest_version(p)
+                v = highest_version(p, known)
                 lines.append(_row([_name_cell(p), v or "-", _loader_text(p, v)]))
             parts.append(f"## {heading}\n\n" + "\n".join(lines))
     return "\n\n".join(parts) + "\n"
