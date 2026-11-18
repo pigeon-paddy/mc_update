@@ -1,4 +1,4 @@
-"""Markdown rendering: user view, deployment lists and the ALL file."""
+"""Markdown rendering: user view, deployment lists, the ALL file and the wiki file."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from ..config.default_config import (
     SHOW_LOADER_SUMMARY,
     TYPE_ORDER,
     UNIVERSAL_TYPES,
+    WIKI_DESC_MAX,
 )
 from ..models.classes import Project, is_wildcard, series_matches, version_key
 
@@ -211,3 +212,28 @@ def render_all(projects: list[Project], known: list[str] | None = None) -> str:
                 lines.append(_row([_name_cell(p), v or "-", _loader_text(p, v)]))
             parts.append(f"## {heading}\n\n" + "\n".join(lines))
     return "\n\n".join(parts) + "\n"
+
+
+def _short(text: str, limit: int = WIKI_DESC_MAX) -> str:
+    """One-line description, cut at a word boundary."""
+    text = re.sub(r"\s+", " ", text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:.-") + "…"
+
+
+def render_wiki(projects: list[Project]) -> str:
+    """
+    Every project with a short description: same headings, categories and sorting as the ALL file,
+    but each table row is Name | Description.
+    """
+    parts = []
+    for type_heading, sections in _sections(projects):
+        parts.append(f"# {type_heading}")
+        for heading, entries in sections:
+            lines = [_row(["Name", "Description"]), _row(["---", "---"])]
+            for p in entries:
+                text = _short(p.description).replace("|", "\\|") or "-"
+                lines.append(_row([_name_cell(p), text]))
+            parts.append(f"## {heading}\n\n" + "\n".join(lines))
+    return "\n\n".join(parts) + "\n" if parts else ""

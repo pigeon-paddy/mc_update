@@ -8,7 +8,7 @@ import questionary
 from pathlib import Path
 
 from ..models.classes import Project, top_versions
-from .md_render import render_all, render_markdown
+from .md_render import render_all, render_markdown, render_wiki
 
 
 def read_mod_list(path: str | Path) -> list[str]:
@@ -28,17 +28,22 @@ def read_mod_list(path: str | Path) -> list[str]:
     return names
 
 
+def _write_atomic(path: Path, text: str) -> None:
+    """Write via a temp file and replace, so a synced folder never sees a half-written file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
 def export_markdown(compatible: dict[str, list[Project]], out_dir: Path,
                     prefix: str = "MC_Update", n: int = 3) -> list[Path]:
     """Write <prefix>_<version>.md for the top n versions; existing files are replaced."""
-    out_dir.mkdir(parents=True, exist_ok=True)
     written = []
     for version in top_versions(compatible, n):
         path = out_dir / f"{prefix}_{version}.md"
-        fd, tmp = tempfile.mkstemp(dir=out_dir, suffix=".tmp")
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(render_markdown(compatible[version], version))
-        os.replace(tmp, path)                              # atomic replace of an existing file
+        _write_atomic(path, render_markdown(compatible[version], version))
         written.append(path)
     return written
 
@@ -46,12 +51,18 @@ def export_markdown(compatible: dict[str, list[Project]], out_dir: Path,
 def export_all(projects: list[Project], out_dir: Path, prefix: str = "MC_Update",
                known: list[str] | None = None) -> Path:
     """Write <prefix>_ALL.md with every found project; an existing file is replaced."""
-    out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{prefix}_ALL.md"
-    fd, tmp = tempfile.mkstemp(dir=out_dir, suffix=".tmp")
-    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-        f.write(render_all(projects, known))
-    os.replace(tmp, path)
+    _write_atomic(path, render_all(projects, known))
+    return path
+
+
+def export_wiki(projects: list[Project], out_dir: Path, prefix: str = "MC_Update") -> Path | None:
+    """Write <prefix>_WIKI.md (every project with a short description); None if there is nothing to write."""
+    text = render_wiki(projects)
+    if not text:
+        return None
+    path = out_dir / f"{prefix}_WIKI.md"
+    _write_atomic(path, text)
     return path
 
 

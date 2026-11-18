@@ -86,7 +86,7 @@ MISS_TTL = 1 * 3600        # "not found" results: 1 h
 
 MC_VERSIONS_TTL = 6 * 3600   # list of MC releases: 6 h
 
-DEFAULT_MIN_VERSION = "1.21.11"
+DEFAULT_MIN_VERSION = "1.21.1"
 
 RELEASE_RE = re.compile(r"^\d+\.\d+(\.\d+)?$")  # skips snapshots / pre-releases
 # A project tag like "1.21.x" (or 1.21.*) means: every release of that series, 1.21.0 up to the last 1.21.N
@@ -158,6 +158,9 @@ NON_COLUMN_LOADERS = {"datapack", "minecraft", "any", "unknown"}     # tags that
 LOADER_ORDER = ("fabric", "neoforge", "forge", "quilt", "paper", "purpur", "spigot", "bukkit", "folia", "sponge")
 
 LOADER_NAMES = {"neoforge": "NeoForge"}
+
+# --wiki: every found project gets a one-line description of at most this many characters
+WIKI_DESC_MAX = 140                                   # cut at a word boundary
 
 SHOW_LOADER_SUMMARY = True                            # one-line "supported x/y per loader" table at the top
 

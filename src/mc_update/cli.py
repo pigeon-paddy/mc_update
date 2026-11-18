@@ -31,7 +31,7 @@ from .models.classes import (
     top_versions,
     version_key,
 )
-from .parsers.file_handler import export_all, export_markdown, read_mod_list, initMarkdown
+from .parsers.file_handler import export_all, export_markdown, export_wiki, read_mod_list, initMarkdown
 
 
 # --------------------------------------------------------------------------- #
@@ -132,6 +132,7 @@ def main() -> None:
     Flags (both modes): --loader=fabric (optional filter, default: all loaders)  --version=1.21.1 (one fixed MC version, skips the
     best-fit ranking)  --min=1.21.1  --max=26.3  --refresh  --verbose
     --all   also writes <list name>_ALL.md: every found project with its highest MC version + loaders
+    --wiki  also writes <list name>_WIKI.md: every found project with a short description
     Export: list mode writes <list name>_<version>.md for the top 3 versions (--no-export to skip);
             test mode only does so with --export. Target folder: OUTPUT_DIR in .env, default = mod list folder.
     """
@@ -145,14 +146,11 @@ def main() -> None:
         verbose = True                               # always show the full project info here
         do_export = "--export" in sys.argv           # test mode only writes files on request
     else:
-    
+        # path = Path(_opt_or_none("file") or require_env("MOD_LIST_PATH"))
         base_path = Path(_opt_or_none("file") or require_env("MOD_LIST_PATH"))
         path = initMarkdown(base_path)
         if path is None:
             return
-    
-    
-        # path = Path(_opt_or_none("file") or require_env("MOD_LIST_PATH"))
         try:
             names = read_mod_list(path)
         except OSError as e:
@@ -191,14 +189,24 @@ def main() -> None:
     if len(not_found) == len(mods):
         sys.exit("No projects found (check stderr above / CURSEFORGE_API_KEY).")
 
-    if "--all" in sys.argv:                          # every found project, independent of MC version
+    do_all, do_wiki = "--all" in sys.argv, "--wiki" in sys.argv
+    everything: list[Project] = []                   # every found project once, independent of MC version
+    if do_all or do_wiki:
         seen_ids: set[tuple] = set()
-        everything = []
         for ps in mods.values():
             for p in ps:
                 if (p.source, p.id) not in seen_ids:
                     seen_ids.add((p.source, p.id))
                     everything.append(p)
+
+    if do_wiki:
+        wiki_path = export_wiki(everything, out_dir, prefix)
+        if wiki_path:
+            print(f"\nWrote {wiki_path}  ({len(everything)} projects)")
+        else:
+            print("\nNothing found - wiki file not written.")
+
+    if do_all:
         try:                                             # all known releases, to resolve wildcards like 1.21.x
             known = mc_versions_between("0.0", None, cache, refresh)
         except Exception as e:
