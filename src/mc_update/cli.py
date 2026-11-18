@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+import socket
 from collections.abc import Callable
 from pathlib import Path
 
@@ -37,7 +38,7 @@ from .parsers.file_handler import export_all, export_markdown, export_wiki, read
 # --------------------------------------------------------------------------- #
 # Combined lookup + demo
 # --------------------------------------------------------------------------- #
-def lookup(name: str, cache: ProjectCache | None = None, refresh: bool = False) -> list[Project]:
+def lookup(name: str, cache: ProjectCache | None = None, refresh: bool = False, Debug=False) -> list[Project]:
     """
     Per type (mod -> datapack -> plugin -> resource pack): Modrinth first, CurseForge only if Modrinth
     has nothing (and only if an API key is set). The first hit wins; later types are not searched.
@@ -60,7 +61,7 @@ def lookup(name: str, cache: ProjectCache | None = None, refresh: bool = False) 
                 print(f"[{source}] {ptype} search for {name!r} failed: {e}", file=sys.stderr)
                 continue
             if p:
-                if ptype != "mod":
+                if ptype != "mod" and Debug:
                     print(f"[lookup] {name!r} is not a mod - found as {ptype} on {source}", file=sys.stderr)
                 return [p]
 
@@ -124,6 +125,20 @@ def _opt(name: str, default: str) -> str:
     return _opt_or_none(name) or default
 
 
+
+import urllib.request
+
+def check_internet_urllib(url="https://www.google.com", timeout=5):
+    try:
+        urllib.request.urlopen(url, timeout=timeout)
+        return True
+    except Exception as e:
+        print(f"No internet connection: {e}")
+        return False
+
+
+
+
 def main() -> None:
     """
     Default:  read mods from MOD_LIST_PATH in .env (or --file=PATH) and compute the best-fitting MC version.
@@ -136,6 +151,10 @@ def main() -> None:
     Export: list mode writes <list name>_<version>.md for the top 3 versions (--no-export to skip);
             test mode only does so with --export. Target folder: OUTPUT_DIR in .env, default = mod list folder.
     """
+    
+    if not check_internet_urllib():
+        return
+    
     positional = [a for a in sys.argv[1:] if not a.startswith("--")]
     refresh = "--refresh" in sys.argv
     verbose = "--verbose" in sys.argv
